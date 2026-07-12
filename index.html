@@ -55,7 +55,7 @@
     import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, deleteDoc, updateDoc, getDocs, query, where } from 'firebase/firestore';
     import { Clock, History, Activity, Trash2, ShieldAlert, Crosshair, Skull, UserCog, Users, MapPin, ChevronDown, ChevronUp, Search, Image as ImageIcon, Upload, Edit2, X, Flame, RefreshCw, CheckCircle, Server, LogOut, KeyRound, Save, Star, Eye, EyeOff, Power, Ban, Moon, Settings } from 'lucide-react';
 
-    const firebaseConfig = {
+  const firebaseConfig = {
   apiKey: "AIzaSyBpydvOWgpVrwkPhGjE8tyyvCZxsTN4q-E",
   authDomain: "wakubosstime2.firebaseapp.com",
   projectId: "wakubosstime2",
@@ -78,7 +78,8 @@
         return () => clearInterval(timer);
       }, []);
 
-      if (!nextSpawnTime) return <span className="text-gray-400">未知</span>;
+      if (nextSpawnTime === null || nextSpawnTime === undefined || nextSpawnTime === '') return <span className="text-gray-400">未知</span>;
+      if (nextSpawnTime === 0) return <span className="font-mono tracking-wide text-green-400 font-bold drop-shadow-[0_0_5px_rgba(74,222,128,0.3)]">🟢 確定重生</span>;
       
       const diffMin = nextSpawnTime - now;
       const diffMax = (maxSpawnTime || nextSpawnTime) - now;
@@ -327,14 +328,14 @@
       const [uiTick, setUiTick] = useState(0);
       const [sysSettings, setSysSettings] = useState({ autoClearEnabled: false, autoClearHours: 4, autoClearInterval: 1 });
 
-      const [activeModalBossId, setActiveModalBossId] = useState(null); 
+      const [activeModalBossId, setActiveModalBossId] = useState(() => localStorage.getItem('wakuboss_active_modal') || null); 
       const [modalPage, setModalPage] = useState(1); 
       const [adminTab, setAdminTab] = useState('home'); 
       const [showPwdModal, setShowPwdModal] = useState(false);
       const [newPwd, setNewPwd] = useState('');
       const [patrolModalData, setPatrolModalData] = useState(null); 
       const [expandedMemoId, setExpandedMemoId] = useState(null); 
-      const [isReportFormCollapsed, setIsReportFormCollapsed] = useState(false);
+      const [isReportFormCollapsed, setIsReportFormCollapsed] = useState(() => localStorage.getItem('wakuboss_form_collapsed') === 'true');
       
       const [searchQuery, setSearchQuery] = useState('');
       const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -358,7 +359,7 @@
         return saved ? JSON.parse(saved) : {};
       });
 
-      const [bossSort, setBossSort] = useState('levelAsc'); 
+      const [bossSort, setBossSort] = useState(() => localStorage.getItem('wakuboss_sort') || 'levelAsc'); 
       const [adminSortOrder, setAdminSortOrder] = useState('levelDesc'); 
       const [newTemplateName, setNewTemplateName] = useState('');
       const [newTemplateLevel, setNewTemplateLevel] = useState('');
@@ -376,6 +377,20 @@
       const [globalBaseTime, setGlobalBaseTime] = useState(''); 
       const [staleClearHours, setStaleClearHours] = useState(4);
 
+      // 手機背景保護與狀態儲存
+      useEffect(() => {
+        if (activeModalBossId) localStorage.setItem('wakuboss_active_modal', activeModalBossId);
+        else localStorage.removeItem('wakuboss_active_modal');
+      }, [activeModalBossId]);
+
+      useEffect(() => {
+        localStorage.setItem('wakuboss_sort', bossSort);
+      }, [bossSort]);
+
+      useEffect(() => {
+        localStorage.setItem('wakuboss_form_collapsed', isReportFormCollapsed);
+      }, [isReportFormCollapsed]);
+
       useEffect(() => {
         const timer = setInterval(() => setUiTick(t => t + 1), 1000);
         return () => clearInterval(timer);
@@ -391,12 +406,19 @@
           }, 30 * 60 * 1000);
         };
 
+        const handleVisibilityChange = () => {
+          if (document.visibilityState === 'visible') {
+            resetIdleTimer();
+          }
+        };
+
         resetIdleTimer();
 
         window.addEventListener('mousedown', resetIdleTimer);
         window.addEventListener('keydown', resetIdleTimer);
         window.addEventListener('touchstart', resetIdleTimer);
         window.addEventListener('scroll', resetIdleTimer, true);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
           clearTimeout(idleTimer);
@@ -404,6 +426,7 @@
           window.removeEventListener('keydown', resetIdleTimer);
           window.removeEventListener('touchstart', resetIdleTimer);
           window.removeEventListener('scroll', resetIdleTimer, true);
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
       }, [isSleeping]);
 
@@ -567,8 +590,8 @@
             }
           });
 
-          const isGlobalActive = template.globalIsAlive || (effectiveGlobalMaxSpawn !== null && effectiveGlobalMaxSpawn > Date.now());
-          const hasRecord = channels.length > 0 || isGlobalActive;
+          // 修正：將全域狀態(維修/標記重生)從 hasRecord 中移除，僅計算「是否有分流紀錄」
+          const hasRecord = channels.length > 0;
 
           return { ...template, channels, effectiveGlobalSpawn, effectiveGlobalMaxSpawn, earliestSpawn: earliest, earliestMaxSpawn: earliestMax, hasRecord };
         });
@@ -764,7 +787,7 @@
           setChannelInput(''); 
           setMemoInput('');
           setKillTimeInput('');
-          setIsReportFormCollapsed(true); // 回報後自動收起表單
+          setIsReportFormCollapsed(true);
           showMessage(`已成功回報 ${template.name} (${channelInput.trim()}頻)`, "success");
         } catch (error) { showMessage("錯誤: 通報失敗，請確認權限", "error"); } finally { setIsReporting(false); }
       };
@@ -1248,7 +1271,7 @@
                                   <div className="flex items-center justify-end gap-1 sm:gap-1.5 relative z-10 shrink-0 ml-1">
                                     {isWarning && <Flame className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-red-500 animate-bounce mr-1" />}
                                     
-                                    <span className={`text-[11px] sm:text-xs mr-1 ${isWarning ? 'text-red-400 font-bold' : isRekilled && !isFloating && !isSpawned ? 'text-purple-300' : 'text-gray-300'}`}>
+                                    <span className={`text-[11px] sm:text-xs mr-1 ${isWarning ? 'text-red-400 font-bold' : isRekilled && !isFloating && !isSpawned && !isWarning ? 'text-purple-300' : 'text-gray-300'}`}>
                                        <CountdownTimer nextSpawnTime={active.nextSpawn} maxSpawnTime={active.maxSpawn} />
                                     </span>
                                     
@@ -1681,8 +1704,11 @@
                           return diff > 0 && diff <= 10 * 60 * 1000;
                         }).length;
 
+                        // 判斷是否為全域重生狀態
+                        const isGlobalSpawned = group.effectiveGlobalSpawn === 0 || (group.effectiveGlobalMaxSpawn !== null && group.effectiveGlobalMaxSpawn <= currentNow);
+
                         return (
-                          <div key={group.id} onClick={() => setActiveModalBossId(group.id)} className={`bg-gray-800 rounded-2xl border transition-all duration-300 overflow-hidden cursor-pointer hover:scale-[1.01] active:scale-[0.99] relative ${warningCount > 0 ? 'border-red-500/40 shadow-[0_0_10px_rgba(239,68,68,0.1)]' : 'border-gray-700 hover:border-gray-500'} ${isPinned ? 'ring-1 ring-yellow-500/30 bg-gray-800/90' : ''}`}>
+                          <div key={group.id} onClick={() => setActiveModalBossId(group.id)} className={`bg-gray-800 rounded-2xl border transition-all duration-300 overflow-hidden cursor-pointer hover:scale-[1.01] active:scale-[0.99] relative ${warningCount > 0 ? 'border-red-500/40 shadow-[0_0_10px_rgba(239,68,68,0.1)]' : isGlobalSpawned && group.channels.length === 0 ? 'border-green-500/40 shadow-[0_0_10px_rgba(34,197,94,0.1)]' : 'border-gray-700 hover:border-gray-500'} ${isPinned ? 'ring-1 ring-yellow-500/30 bg-gray-800/90' : ''}`}>
                             
                             <button onClick={(e) => togglePin(e, group.id)} className="absolute top-2 right-2 p-1.5 rounded-full bg-gray-900/50 hover:bg-gray-700 transition-colors z-20 group" title={isPinned ? "取消釘選" : "釘選置頂"}>
                                <Star className={`w-4 h-4 transition-all ${isPinned ? 'fill-yellow-500 text-yellow-500' : 'text-gray-500 group-hover:text-yellow-400'}`} />
@@ -1690,8 +1716,8 @@
 
                             <div className="p-4 sm:p-5 flex items-center justify-between select-none bg-gray-800 hover:bg-gray-750 transition-colors">
                               <div className="flex items-center gap-4">
-                                <div className={`flex shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gray-900 items-center justify-center border overflow-hidden ${warningCount > 0 ? 'border-red-500/40' : 'border-gray-700'}`}>
-                                  {group.imageUrl ? <img src={group.imageUrl} alt={group.name} className="w-full h-full object-cover" /> : <Skull className={`w-6 h-6 ${warningCount > 0 ? 'text-red-400' : 'text-gray-500'}`} />}
+                                <div className={`flex shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-gray-900 items-center justify-center border overflow-hidden ${warningCount > 0 ? 'border-red-500/40' : isGlobalSpawned && group.channels.length === 0 ? 'border-green-500/40' : 'border-gray-700'}`}>
+                                  {group.imageUrl ? <img src={group.imageUrl} alt={group.name} className="w-full h-full object-cover" /> : <Skull className={`w-6 h-6 ${warningCount > 0 ? 'text-red-400' : isGlobalSpawned && group.channels.length === 0 ? 'text-green-400' : 'text-gray-500'}`} />}
                                 </div>
                                 <div>
                                   <h3 className="text-lg sm:text-xl font-bold text-white flex items-center flex-wrap gap-2 pr-6">
@@ -1758,6 +1784,8 @@
             localStorage.removeItem('wakuboss_user_id');
           }
           setIsCheckingAuth(false);
+        }, (error) => {
+          console.warn("Auth 監聽暫時中斷或網路異常:", error);
         });
 
         return () => unsub();
